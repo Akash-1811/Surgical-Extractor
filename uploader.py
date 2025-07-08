@@ -24,12 +24,13 @@ class SurgicalCaseExtractor:
         self.notes_table = pd.DataFrame()
         self.final_json = {}
 
-    def clean(self, val):
-        if pd.isna(val):
-            return ""
-        return str(val).strip()
+    def clean(self, text):
+        return str(text).strip().replace('\n', ' ').replace('\r', '').strip()
 
-    def extract_case_info(self, df):
+    def extract_case_info(self):
+        df = self.df
+
+        # Fixed fields by position
         case_info = {
             "surgeon": self.clean(df.iloc[2, 0]),
             "procedure": self.clean(df.iloc[3, 0]),
@@ -61,9 +62,10 @@ class SurgicalCaseExtractor:
                     synonyms.add(lemma.name().replace("_", " ").lower())
             return synonyms
 
+        # Expand with synonyms
         expanded_key_map = {}
         for field, syns in key_map.items():
-            all_syns = set(syns)
+            all_syns = set(s.lower() for s in syns)
             for s in syns:
                 all_syns.update(get_wordnet_synonyms(s))
             expanded_key_map[field] = list(all_syns)
@@ -75,29 +77,45 @@ class SurgicalCaseExtractor:
                 all_synonyms.append(syn)
                 synonym_to_field[syn] = field
 
-        for i in range(10):
-            row = [self.clean(x) for x in df.iloc[i, :12]]
+        for i in range(len(df)):
+            row_raw = [str(x).strip().lower() for x in df.iloc[i, :12] if pd.notna(x)]
+            if any("qty" in cell and "item" in cell for cell in row_raw):
+                break  # Stop when materials table begins
+
+            row = [self.clean(str(x)) for x in df.iloc[i, :12] if pd.notna(x)]
             for idx, cell in enumerate(row):
                 cell_lower = cell.lower()
-                best_match, score, match_idx = process.extractOne(cell_lower, all_synonyms, scorer=fuzz.partial_ratio)
+
+                # ✅ Extract all known technical fields from cell (regardless of match)
+                multi_matches = {
+                    "cautery": re.search(r"cautery:\s*([^\s]+)", cell, re.I),
+                    "bipolar": re.search(r"bipolar:\s*([^\s]+)", cell, re.I),
+                    "sponge count": re.search(r"sponge count:\s*(\w+)", cell, re.I),
+                    "ligasure": re.search(r"ligasure:\s*([^\s]+)", cell, re.I)
+                }
+                for key, match in multi_matches.items():
+                    if match:
+                        case_info[key] = match.group(1)
+
+                # ✅ Continue fuzzy keyword match for general fields
+                best_match, score, _ = process.extractOne(cell_lower, all_synonyms, scorer=fuzz.partial_ratio)
                 if score >= 85:
-                    outk = synonym_to_field[best_match]
-                    if outk in ["cautery", "bipolar"]:
-                        m_cautery = re.search(r"Cautery:\s*([^\s]+)", cell, re.I)
-                        m_bipolar = re.search(r"Bipolar:\s*([^\s]+)", cell, re.I)
-                        if m_cautery:
-                            case_info["cautery"] = m_cautery.group(1)
-                        if m_bipolar:
-                            case_info["bipolar"] = m_bipolar.group(1)
+                    field = synonym_to_field[best_match]
+
+                    # Skip if it's a technical field already processed above
+                    if field in multi_matches:
+                        continue
+
+                    if ':' in cell:
+                        value = cell.split(":", 1)[1].strip()
+                    elif idx + 1 < len(row):
+                        value = row[idx + 1].strip()
                     else:
-                        if ":" in cell:
-                            value = cell.split(":", 1)[1].strip()
-                        elif idx + 1 < len(row):
-                            value = row[idx + 1].strip()
-                        else:
-                            value = ""
-                        if not case_info[outk]:
-                            case_info[outk] = value
+                        value = ""
+
+                    if not case_info[field]:
+                        case_info[field] = value
+
         return case_info
 
     def extract_other_keys(self):
