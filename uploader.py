@@ -263,7 +263,7 @@ class SurgicalCaseExtractor:
             row_text = " ".join(str(cell).strip() for cell in row if pd.notna(cell)).strip()
             if row_text:
                 lines.append(row_text)
-        notes_text = "\n".join(lines)
+        notes_text = lines
         self.final_json["Surgical Tech Notes"] = [{"notes": notes_text}]
 
     def extract_all(self):
