@@ -24,6 +24,11 @@ class SurgicalCaseExtractor:
         self.notes_table = pd.DataFrame()
         self.final_json = {}
 
+    def clean(self, val):
+        if pd.isna(val):
+            return ""
+        return str(val).strip()
+
     def clean(self, text):
         return str(text).strip().replace('\n', ' ').replace('\r', '').strip()
 
@@ -117,7 +122,7 @@ class SurgicalCaseExtractor:
                         case_info[field] = value
 
         return case_info
-
+    
     def extract_other_keys(self):
         wanted_keys = ["Instruments Pulled By", "Supplies Pulled By", "LAST UPDATED"]
         other_keys = {}
