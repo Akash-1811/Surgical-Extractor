@@ -1,0 +1,83 @@
+============================
+Excel/CSV Extraction API v1
+============================
+
+Overview:
+---------
+This API allows you to upload an Excel (.xlsx, .xls) or CSV (.csv) file and returns structured JSON extracted from the file. For Excel files with multiple sheets, each sheet is processed individually and results are returned per sheet.
+
+How to Run the API:
+-------------------
+1. Create and activate a Python virtual environment:
+   > python -m venv venv
+   > venv\Scripts\activate
+
+2. Install dependencies:
+   > pip install -r requirements.txt
+
+3. Start the API server:
+   > python uploader.py
+   (or)
+   > uvicorn uploader:api_v1 --host 0.0.0.0 --port 8000
+
+4. The API will be available at: http://localhost:8000
+
+How to Call the API:
+--------------------
+- **HTTP Method:** POST
+- **Endpoint:** /extract
+- **URL Example:** http://localhost:8000/extract
+- **Content-Type:** multipart/form-data
+- **Authentication:** None required (local/test deployment)
+
+Step-by-step:
+1. Prepare your Excel (.xlsx, .xls) or CSV (.csv) file.
+2. Use a tool like curl, Postman, or any HTTP client to send a POST request to the endpoint.
+3. Attach your file as a form-data field named `file`.
+4. Receive a JSON response with the extracted data.
+
+Payload:
+--------
+- **Parameter:** file
+  - **Type:** File (form-data)
+  - **Required:** Yes
+  - **Description:** The Excel or CSV file to be processed. Only one file per request.
+  - **Example:**
+    - For curl: `-F "file=@/path/to/your/file.xlsx"`
+    - For Postman: Add a form-data key named `file` and select your file.
+
+Example curl Command:
+---------------------
+For Excel:
+  curl -X POST "http://localhost:8000/extract" -F "file=@/path/to/your/file.xlsx"
+For CSV:
+  curl -X POST "http://localhost:8000/extract" -F "file=@/path/to/your/file.csv"
+
+Example Response (Excel with multiple sheets):
+----------------------------------------------
+{
+  "Sheet1": {
+    "sheet_status": "data extracted",
+    "extracted": { ... }
+  },
+  "Sheet2": {
+    "sheet_status": "empty or unrecognized format",
+    "extracted": { ... }
+  }
+}
+
+Example Response (CSV):
+-----------------------
+{
+  "Case Info": { ... },
+  "Other Keys": { ... },
+  ...
+}
+
+Notes for Developers:
+---------------------
+- The /extract endpoint will always return all sheet names for Excel files, with a status for each.
+- For CSV files, the result is a single extraction.
+- Interactive API docs are available at: http://localhost:8000/docs
+- The extraction logic is identical for both Excel and CSV.
+- For production, use a proper ASGI server (e.g., uvicorn or gunicorn with uvicorn workers). 
