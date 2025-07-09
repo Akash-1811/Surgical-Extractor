@@ -296,32 +296,48 @@ def extract_excel(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename[file.filename.rfind('.'):]) as tmp:
             tmp.write(file.file.read())
             tmp_path = tmp.name
+
+        def is_case_info_empty(info):
+            return not info or all(v.strip() == '' for v in info.values())
+
         if file.filename.endswith((".xlsx", ".xls")):
-            # Read all sheet names
             xls = pd.ExcelFile(tmp_path)
             result = {}
             for sheet_name in xls.sheet_names:
-                extractor = SurgicalCaseExtractor(tmp_path, sheet_name=sheet_name)
-                case_info = extractor.extract_case_info()
-                other_keys = extractor.extract_other_keys()
-                extractor.extract_material_tables()
-                extractor.clean_notes_from_tables()
-                extractor.convert_tables_to_json()
-                output = {
-                    "Case Info": case_info,
-                    "Other Keys": other_keys,
-                }
-                output.update(extractor.final_json)
-                # Add sheet status for debugging
-                if (not case_info or all(v == '' for v in case_info.values())) and not extractor.final_json:
-                    sheet_status = "empty or unrecognized format"
-                else:
-                    sheet_status = "data extracted"
-                result[sheet_name] = {
-                    "sheet_status": sheet_status,
-                    "extracted": output
-                }
+                print(sheet_name, 'Your Sheet Name')
+                try:
+                    extractor = SurgicalCaseExtractor(tmp_path, sheet_name=sheet_name)
+                    if extractor.df.empty or extractor.df.shape[0] < 4:
+                        result[sheet_name] = {
+                            "sheet_status": "Empty Data",
+                            "extracted": {}
+                        }
+                        continue
+                    case_info = extractor.extract_case_info()
+                    other_keys = extractor.extract_other_keys()
+                    extractor.extract_material_tables()
+                    extractor.clean_notes_from_tables()
+                    extractor.convert_tables_to_json()
+                    output = {
+                        "Case Info": case_info,
+                        "Other Keys": other_keys,
+                    }
+                    output.update(extractor.final_json)
+                    if is_case_info_empty(case_info) and not extractor.final_json:
+                        sheet_status = "Insufficient Data"
+                    else:
+                        sheet_status = "data extracted"
+                    result[sheet_name] = {
+                        "sheet_status": sheet_status,
+                        "extracted": output
+                    }
+                except Exception as e:
+                    result[sheet_name] = {
+                        "sheet_status": f"error: {str(e)}",
+                        "extracted": {}
+                    }
             return JSONResponse(content=result)
+
         elif file.filename.endswith(".csv"):
             class CSVSurgicalCaseExtractor(SurgicalCaseExtractor):
                 def __init__(self, file_path):
@@ -344,6 +360,7 @@ def extract_excel(file: UploadFile = File(...)):
             return JSONResponse(content=output)
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type.")
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
